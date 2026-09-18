@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink text-white font-body;
+}
+
+/* Orchestrated single reveal for a new diagnosis card */
+.dd-fade {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.dd-fade.dd-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Growing bar transition, used for probability bars and the vital-strip chart */
+.dd-bar {
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-fade, .dd-bar {
+    transition: none !important;
+  }
+}
+
+textarea:focus, button:focus-visible, input:focus-visible {
+  outline: 2px solid #4FD1C5;
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0F1B22;
+}
+::-webkit-scrollbar-thumb {
+  background: #233640;
+  border-radius: 4px;
+}
