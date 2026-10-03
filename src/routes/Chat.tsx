@@ -1,17 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import { v4 as uuidv4 } from 'uuid';
-import { Info, Loader2 } from 'lucide-react';
+
+import {
+  Info,
+  Loader2,
+  Menu,
+} from 'lucide-react';
 
 import Sidebar from '../components/Sidebar';
 import ChatInput from '../components/ChatInput';
 
 import { ChatMessage, ChatSession } from '../types';
-import { getSessions, saveSessions } from '../lib/storage';
+
+import {
+  getSessions,
+  saveSessions,
+} from '../lib/storage';
+
 import {
   ApiError,
   getChatHistory,
   sendChatMessage,
 } from '../lib/api';
+
 
 function makeTitle(text: string): string {
   const trimmed = text.trim();
@@ -20,6 +38,7 @@ function makeTitle(text: string): string {
     ? `${trimmed.slice(0, 42)}...`
     : trimmed;
 }
+
 
 function historyToMessages(
   messages: { role: string; content: string }[]
@@ -38,6 +57,7 @@ function historyToMessages(
     }));
 }
 
+
 function createLocalSession(): ChatSession {
   return {
     id: uuidv4(),
@@ -46,6 +66,7 @@ function createLocalSession(): ChatSession {
     messages: [],
   };
 }
+
 
 export default function Chat() {
   const [sessions, setSessions] = useState<ChatSession[]>(
@@ -59,25 +80,31 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Mobile sidebar state
+  const [mobileSidebarOpen, setMobileSidebarOpen] =
+    useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   /*
    * localStorage is only a UI cache.
-   * The backend/Neon database is the authoritative conversation store.
+   * The backend/Neon database is the authoritative
+   * conversation store.
    */
   useEffect(() => {
     saveSessions(sessions);
   }, [sessions]);
 
+
   /*
-   * Mirrors `sessions` for the hydrate-on-switch effect below, so that
-   * effect can read the latest sessions without depending on (and
-   * re-firing on every change of) the `sessions` array itself.
+   * Mirrors `sessions` for the hydrate-on-switch effect.
    */
   const sessionsRef = useRef(sessions);
+
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
 
   const updateSession = useCallback(
     (
@@ -95,14 +122,7 @@ export default function Chat() {
     []
   );
 
-  /**
-   * Load the authoritative conversation from the backend.
-   *
-   * If the backend says the cached session doesn't exist anymore,
-   * leave the cached conversation untouched.
-   *
-   * Other errors are displayed to the user.
-   */
+
   const hydrateSession = useCallback(
     async (sessionId: string) => {
       setHistoryLoading(true);
@@ -119,10 +139,8 @@ export default function Chat() {
         }));
       } catch (error) {
         /*
-         * A 404 means the local cache contains a session that the
-         * backend does not know about.
-         *
-         * Do NOT erase the cached conversation.
+         * A 404 means the local cache contains a session
+         * that the backend does not know about.
          */
         if (
           error instanceof ApiError &&
@@ -156,21 +174,19 @@ export default function Chat() {
     [updateSession]
   );
 
+
   /*
-   * Whenever the user changes case, hydrate it from Neon/backend.
-   *
-   * A case with no messages yet is a brand-new, locally-created session
-   * that has never been sent to the backend, so there is nothing there to
-   * fetch — hydrating it would always 404. Wait until it has at least one
-   * message (i.e. the first POST /chat has created the row) before asking
-   * the backend for its history.
+   * Hydrate conversation when changing cases.
    */
   useEffect(() => {
     if (!activeId) {
       return;
     }
 
-    const session = sessionsRef.current.find((s) => s.id === activeId);
+    const session =
+      sessionsRef.current.find(
+        (s) => s.id === activeId
+      );
 
     if (session && session.messages.length === 0) {
       return;
@@ -179,8 +195,9 @@ export default function Chat() {
     void hydrateSession(activeId);
   }, [activeId, hydrateSession]);
 
+
   /*
-   * Keep the conversation scrolled to the latest message.
+   * Keep conversation scrolled to latest message.
    */
   useEffect(() => {
     const element = scrollRef.current;
@@ -195,14 +212,17 @@ export default function Chat() {
     });
   }, [activeId, sessions, loading]);
 
+
   const activeSession =
     sessions.find(
       (session) => session.id === activeId
     ) ?? null;
 
+
   const isEmpty =
     !activeSession ||
     activeSession.messages.length === 0;
+
 
   function handleNewCase() {
     const newSession = createLocalSession();
@@ -213,7 +233,19 @@ export default function Chat() {
     ]);
 
     setActiveId(newSession.id);
+
+    // Close drawer on mobile
+    setMobileSidebarOpen(false);
   }
+
+
+  function handleSelectSession(id: string) {
+    setActiveId(id);
+
+    // Close drawer on mobile
+    setMobileSidebarOpen(false);
+  }
+
 
   async function handleSend(text: string) {
     const trimmed = text.trim();
@@ -225,8 +257,8 @@ export default function Chat() {
     let sessionId = activeId;
 
     /*
-     * Create a local UUID immediately so the new case can appear
-     * in the sidebar before the API request completes.
+     * Create local UUID immediately so the new case
+     * appears in the sidebar before the API request completes.
      */
     if (!sessionId) {
       const newSession = createLocalSession();
@@ -272,6 +304,7 @@ export default function Chat() {
         text: result.reply,
         timestamp: Date.now(),
       };
+
       if (result.session_id !== sessionId) {
         setSessions((previous) =>
           previous.map((session) =>
@@ -325,36 +358,69 @@ export default function Chat() {
     }
   }
 
-  return (
-    <div className="h-screen flex bg-ink">
 
+  return (
+    <div className="h-[100dvh] flex bg-ink overflow-hidden">
+
+      {/* Sidebar */}
       <Sidebar
         sessions={sessions}
         activeId={activeId}
-        onSelect={setActiveId}
+        onSelect={handleSelectSession}
         onNewCase={handleNewCase}
+        mobileOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
       />
 
-      <main className="flex-1 min-w-0 flex flex-col">
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Header                                                           */}
-        {/* ---------------------------------------------------------------- */}
+      {/* Main application */}
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col">
 
-        <header className="h-14 flex-shrink-0 border-b border-panelBorder flex items-center px-5">
+        {/* ------------------------------------------------------------ */}
+        {/* Header */}
+        {/* ------------------------------------------------------------ */}
 
-          <div className="w-full max-w-[900px] mx-auto flex items-center justify-between gap-4">
+        <header className="h-14 flex-shrink-0 border-b border-panelBorder flex items-center px-3 sm:px-5">
 
-            <div className="min-w-0">
+          <div className="w-full max-w-[900px] mx-auto flex items-center gap-3">
+
+            {/* Mobile menu */}
+            <button
+              type="button"
+              onClick={() =>
+                setMobileSidebarOpen(true)
+              }
+              aria-label="Open sidebar"
+              className="
+                md:hidden
+                w-9 h-9
+                flex-shrink-0
+                rounded-lg
+                flex items-center justify-center
+                text-[#8FA1A7]
+                hover:text-white
+                hover:bg-panel
+                transition-colors
+              "
+            >
+              <Menu size={20} />
+            </button>
+
+
+            {/* Conversation title */}
+            <div className="min-w-0 flex-1">
               <h1 className="text-white text-sm font-medium truncate">
-                {activeSession?.title || 'Differential Dx'}
+                {activeSession?.title ||
+                  'Differential Dx'}
               </h1>
             </div>
 
-            <div className="flex items-center gap-3 flex-shrink-0">
+
+            {/* Header status */}
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
 
               {historyLoading && (
-                <span className="text-[#8FA1A7] text-xs flex items-center gap-1.5">
+                <span className="hidden sm:flex text-[#8FA1A7] text-xs items-center gap-1.5">
                   <Loader2
                     size={12}
                     className="animate-spin"
@@ -363,99 +429,218 @@ export default function Chat() {
                 </span>
               )}
 
-              <div className="text-riskmoderate text-xs px-3 py-1.5 rounded-full bg-riskmoderate/10 border border-riskmoderate/40 flex items-center gap-1.5">
-                <Info size={13} />
-                Decision support
+
+              <div className="
+                text-riskmoderate
+                text-[10px] sm:text-xs
+                px-2 sm:px-3
+                py-1.5
+                rounded-full
+                bg-riskmoderate/10
+                border border-riskmoderate/40
+                flex items-center gap-1.5
+              ">
+                <Info size={12} />
+
+                <span className="hidden xs:inline sm:inline">
+                  Decision support
+                </span>
+
+                {/* Shorter mobile label */}
+                <span className="sm:hidden">
+                  Support
+                </span>
               </div>
 
             </div>
+
           </div>
         </header>
 
 
+        {/* ------------------------------------------------------------ */}
+        {/* Messages */}
+        {/* ------------------------------------------------------------ */}
+
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-auto"
         >
-          <div className="w-full max-w-[900px] mx-auto px-5 py-8">
+
+          <div className="
+            w-full
+            max-w-[900px]
+            mx-auto
+            px-3 sm:px-5
+            py-5 sm:py-8
+          ">
 
             {isEmpty ? (
+
               /*
-               * Empty state / opening screen
+               * Empty state
                */
-              <div className="min-h-[calc(100vh-14rem)] flex flex-col justify-center">
+              <div className="
+                min-h-[calc(100dvh-14rem)]
+                flex
+                flex-col
+                justify-center
+              ">
 
                 <div className="max-w-[720px]">
 
-                  <p className="text-riskmoderate text-xs font-medium uppercase tracking-wider mb-3">
+                  <p className="
+                    text-riskmoderate
+                    text-xs
+                    font-medium
+                    uppercase
+                    tracking-wider
+                    mb-3
+                  ">
                     Differential Dx
                   </p>
 
-                  <h2 className="text-white text-3xl sm:text-4xl font-semibold leading-tight mb-4">
-                    Hello. Let's work through the case together.
+
+                  <h2 className="
+                    text-white
+                    text-2xl
+                    sm:text-3xl
+                    md:text-4xl
+                    font-semibold
+                    leading-tight
+                    mb-4
+                  ">
+                    Hello. Let's work through
+                    the case together.
                   </h2>
 
-                  <p className="text-[#8FA1A7] text-sm sm:text-base leading-relaxed max-w-[680px]">
-                    Describe the patient and what you know so far.
-                    The conversational assistant can ask for relevant
-                    information, organize the clinical picture, and
-                    use the available differential-diagnosis models
+
+                  <p className="
+                    text-[#8FA1A7]
+                    text-sm
+                    sm:text-base
+                    leading-relaxed
+                    max-w-[680px]
+                  ">
+                    Describe the patient and what
+                    you know so far. The conversational
+                    assistant can ask for relevant
+                    information, organize the clinical
+                    picture, and use the available
+                    differential-diagnosis models
                     when appropriate.
                   </p>
 
-                  <p className="text-[#687A81] text-sm leading-relaxed max-w-[680px] mt-4">
-                    Use the results as decision support alongside
-                    clinical judgement, examination, investigations,
-                    and other appropriate sources of evidence.
+
+                  <p className="
+                    text-[#687A81]
+                    text-sm
+                    leading-relaxed
+                    max-w-[680px]
+                    mt-4
+                  ">
+                    Use the results as decision support
+                    alongside clinical judgement,
+                    examination, investigations, and
+                    other appropriate sources of evidence.
                   </p>
 
                 </div>
 
               </div>
+
             ) : (
+
               /*
                * Conversation
-               *
-               * Each message is a flex column that aligns itself to the
-               * right (user) or left (AI), with a bubble capped at 75% of
-               * the reading width so it reads like a normal two-sided chat
-               * instead of full-width paragraphs.
                */
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-5 sm:gap-6">
 
                 {activeSession?.messages.map(
                   (message) => {
-                    const isUser = message.role === 'user';
+
+                    const isUser =
+                      message.role === 'user';
 
                     return (
                       <article
                         key={message.id}
-                        className={`flex flex-col ${
-                          isUser ? 'items-end' : 'items-start'
-                        }`}
+                        className={`
+                          flex flex-col
+                          ${
+                            isUser
+                              ? 'items-end'
+                              : 'items-start'
+                          }
+                        `}
                       >
 
                         {isUser && (
-                          <div className="text-[11px] uppercase tracking-wider text-[#6F8188] mb-2">
+                          <div className="
+                            text-[10px]
+                            sm:text-[11px]
+                            uppercase
+                            tracking-wider
+                            text-[#6F8188]
+                            mb-1.5
+                            sm:mb-2
+                          ">
                             You
                           </div>
                         )}
 
-                        {!isUser && !message.isError && (
-                          <div className="text-[11px] uppercase tracking-wider text-[#6F8188] mb-2">
-                            Differential Dx
-                          </div>
-                        )}
+
+                        {!isUser &&
+                          !message.isError && (
+                            <div className="
+                              text-[10px]
+                              sm:text-[11px]
+                              uppercase
+                              tracking-wider
+                              text-[#6F8188]
+                              mb-1.5
+                              sm:mb-2
+                            ">
+                              Differential Dx
+                            </div>
+                          )}
+
 
                         <div
                           className={
                             isUser
-                              ? 'max-w-[75%] text-sm sm:text-[15px] leading-7 whitespace-pre-wrap break-words bg-blue-400 text-white px-3.5 py-2 rounded-2xl rounded-tr-sm'
-                              : `max-w-[75%] text-sm sm:text-[15px] leading-7 whitespace-pre-wrap break-words ${
+                              ? `
+                                max-w-[92%]
+                                sm:max-w-[75%]
+                                text-sm
+                                sm:text-[15px]
+                                leading-6
+                                sm:leading-7
+                                whitespace-pre-wrap
+                                break-words
+                                bg-blue-400
+                                text-white
+                                px-3
+                                sm:px-3.5
+                                py-2
+                                rounded-2xl
+                                rounded-tr-sm
+                              `
+                              : `
+                                max-w-[92%]
+                                sm:max-w-[75%]
+                                text-sm
+                                sm:text-[15px]
+                                leading-6
+                                sm:leading-7
+                                whitespace-pre-wrap
+                                break-words
+                                ${
                                   message.isError
                                     ? 'text-riskhigh'
                                     : 'text-[#D6DEDA]'
-                                }`
+                                }
+                              `
                           }
                         >
                           {message.text}
@@ -466,19 +651,41 @@ export default function Chat() {
                   }
                 )}
 
-                {loading && (
-                  <div className="flex flex-col items-start text-[#8FA1A7]">
 
-                    <div className="text-[11px] uppercase tracking-wider text-[#6F8188] mb-2">
+                {loading && (
+                  <div className="
+                    flex
+                    flex-col
+                    items-start
+                    text-[#8FA1A7]
+                  ">
+
+                    <div className="
+                      text-[10px]
+                      sm:text-[11px]
+                      uppercase
+                      tracking-wider
+                      text-[#6F8188]
+                      mb-2
+                    ">
                       Differential Dx
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm">
+
+                    <div className="
+                      flex
+                      items-center
+                      gap-2
+                      text-sm
+                    ">
                       <Loader2
                         size={14}
                         className="animate-spin"
                       />
-                      Reviewing the information provided...
+
+                      <span>
+                        Reviewing the information provided...
+                      </span>
                     </div>
 
                   </div>
@@ -490,26 +697,50 @@ export default function Chat() {
           </div>
         </div>
 
-        <div className="flex-shrink-0 border-t border-panelBorder">
 
-          <div className="w-full max-w-[900px] mx-auto px-5 py-4">
+        {/* ------------------------------------------------------------ */}
+        {/* Input */}
+        {/* ------------------------------------------------------------ */}
+
+        <div className="
+          flex-shrink-0
+          border-t
+          border-panelBorder
+          bg-ink
+        ">
+
+          <div className="
+            w-full
+            max-w-[900px]
+            mx-auto
+            px-3
+            sm:px-5
+            py-3
+            sm:py-4
+          ">
 
             <ChatInput
               onSubmit={handleSend}
               loading={loading}
             />
 
+
             <div className="flex justify-center mt-2">
 
-              <p className="text-[10px] text-[#687A81] text-center">
-                Decision-support tool. Not a substitute for
-                professional clinical judgement.
+              <p className="
+                text-[9px]
+                sm:text-[10px]
+                text-[#687A81]
+                text-center
+                px-2
+              ">
+                Decision-support tool. Not a substitute
+                for professional clinical judgement.
               </p>
 
             </div>
 
           </div>
-
         </div>
 
       </main>
